@@ -28,6 +28,10 @@ void setup() {
   cowpi_set_display_i2c_address(0x27);
   cowpi_setup(LCD1602 | I2C);
   cowpi_lcd1602_set_backlight(true);
+  attachInterrupt(digitalPinToInterrupt(), handle_buttonpress(), mode);
+  attachInterrupt(digitalPinToInterrupt(ioports[D0_D7].output), handle_keypress(), mode);
+  //attachInterrupt(digitalPinToInterrupt(ioports[D0_D7].output), handle_keypress(), mode);
+  //don't know what mode should be or the pin_number
   // timer = ...;
   // timer->control = ...;
   // timer->compareA = ...;
@@ -41,10 +45,34 @@ void loop() {
 
 
 void handle_buttonpress(void) {
-  ;
+  //if(leftbuttonpressed)
+  cowpi_illuminate_left_led();
+  //cowpi_deluminate_right_led();
+  //if(rightbuttonpressed)
+  cowpi_illuminate_right_led();
+  //cowpi_deluminate_right_led();
 }
 
 void handle_keypress(void) {
-  ;
+  uint8_t key_pressed = 0xFF;
+  unsigned long now = millis();
+  if (now - last_keypress > DEBOUNCE_TIME) {
+    last_keypress = now;
+
+    for (int8_t i = 0; i < 4; i++){
+      ioports[D0_D7].output |= 0xF0;
+      ioports[D0_D7].output &= ~(1 << (i+4));
+      delayMicroseconds(1);
+      for (int8_t j = 0; j < 4; j++){
+        if(!(ioports[D14_D19].input & (1 << j)))
+        {
+          key_pressed = keys[i][j];
+        }
+
+      }
+    }    
+  }
+  ioports[D0_D7].output &= 0x0F;
+  cowpi_lcd1602_place_character(0x0, key_pressed+'0');
 }
 
