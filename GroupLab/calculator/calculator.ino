@@ -15,7 +15,7 @@
 
 #include "CowPi.h"
 
-#define DEBOUNCE_TIME 200u
+#define DEBOUNCE_TIME 500u
 
 
 // UNCOMMENT THE STRUCTURE FOR THE TIMER YOU WLL USE
@@ -126,6 +126,29 @@ void handle_buttonpress() {
 
     if (cowpi_left_button_is_pressed()) {
       //negate number
+      //if op2 exists, negate it. if op2 doesn't exist, op1 is negated
+      if (operand_two != NULL) {
+        //negate op2
+        operand_two *= -1;
+        //find leftmost side of number on botrow to add/remove negative sign. start at 1 to ignore operand
+        int curr_ind = 1;
+        while (((bot_row[curr_ind] == ' ')) && curr_ind < 17) {
+          curr_ind++;
+        }
+        if (operand_two < 0) {
+          //add a negative sign
+          bot_row[curr_ind - 1] = '-';
+        } else {
+          //remove negative sign
+          bot_row[curr_ind] = ' ';
+        }
+
+
+
+      } else {
+        //negate op1
+        operand_one *= -1;
+      }
     }
     if (cowpi_right_button_is_pressed()) {
       //clear op no matter what
@@ -221,18 +244,28 @@ void handle_keypress() {
 
       */
       actual_char = key_pressed + 55;
-      if (operand_one == 0) {
-        operand_one = operand_two;
-        operand_two = NULL;
-      } else {
-        //there's a val in op1
-        if (operand != ' ') {
-          //there's already an operand
-          if (operand_two != NULL) {
-            do_operand();
-          }
+      //(operand_one == 0) ||
+      if (operand_two != NULL) {
+        //check if there's an operation to do
+        if (operand == ' ') {
+          //move value up because you're starting a new calculation
+          operand_one = operand_two;
+          operand_two = NULL;
+        } else {
+          do_operand();
         }
       }
+
+
+      // if (((operand == ' ') && (operand_two != NULL))) {
+      //   //move the value up if starting a new calc
+
+      // } else {
+      //     if (operand_two != NULL) {
+
+      //     }
+
+      // }
       //update operand at end no matter what
 
       //find operand
