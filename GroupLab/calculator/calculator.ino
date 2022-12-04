@@ -40,6 +40,7 @@ static char bot_row[17] = "                 ";
 bool is_error = 0;
 static char operand = ' ';
 
+const char division_sign = 0xFD;
 const uint8_t keys[4][4] = {
   { 0x1, 0x2, 0x3, 0xA },
   { 0x4, 0x5, 0x6, 0xB },
@@ -246,7 +247,7 @@ void handle_keypress() {
           operand = 'x';
           break;
         case 'D':
-          operand = 0xFD;
+          operand = division_sign;
           break;
         case 'E':
           operand = ' ';
@@ -278,7 +279,7 @@ void do_operand() {
     case 'x':
       operand_one *= operand_two;
       break;
-    case 0xFD:
+    case division_sign:
       if (operand_two != 0) {
         operand_one /= operand_two;
       } else {
