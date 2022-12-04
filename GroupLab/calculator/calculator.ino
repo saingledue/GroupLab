@@ -127,10 +127,9 @@ void handle_buttonpress() {
       //negate number
     }
     if (cowpi_right_button_is_pressed()) {
-      //clear op
+      //clear op no matter what
       operand = ' ';
       bot_row[0] = ' ';
-
       //clear value
       //if op2 is being built, op2 is reset to no defined value, next operation is cleared, and op 1 is displayed
       if (operand_two != NULL) {
@@ -140,18 +139,12 @@ void handle_buttonpress() {
         for (int i = 1; i < 17; i++) {
           bot_row[i] = ' ';
         }
-      } else{
+      } else {
         //else op1 resets to 0 and next op cleared
         operand_one = 0;
       }
-
     }
   }
-
-
-  //cowpi_deluminate_right_led();
-
-  //cowpi_deluminate_right_led();
 }
 
 
@@ -183,9 +176,8 @@ void handle_keypress() {
       }
     }
   }
-
-  printf("key pressed is: %d \n", key_pressed);
   ioports[D0_D7].output &= 0x0F;
+
   if (key_pressed < 255) {
     //actual check to see what to do
     char actual_char = ' ';
@@ -219,6 +211,7 @@ void handle_keypress() {
       bot_row[string_index] = actual_char;
 
     } else if (key_pressed <= 0xE) {
+      //operand key pressed
       //steps
       /**
       2. if operand_1 = 0, op1 = op2
@@ -270,8 +263,6 @@ void handle_keypress() {
         bot_row[i] = ' ';
       }
     }
-    //issue I'm having is the key pressed is turning to 255 immediately after the button was pressed
-    printf("operand 2 is %ld \n", operand_two);
   }
 }
 
