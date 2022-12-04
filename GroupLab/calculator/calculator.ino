@@ -32,12 +32,13 @@ volatile int timer_time = 0;
 bool is_timedout = 0;
 
 //will be in top row
-volatile int operand_one = 0;
+volatile int32_t operand_one = 0;
 //will be in bottom row
-volatile int operand_two = NULL;
-static char top_row[16] = "                ";
-static char bot_row[16] = "                ";
+volatile int32_t operand_two = NULL;
+static char top_row[17] = "                 ";
+static char bot_row[17] = "                 ";
 bool is_error = 0;
+static char operand = ' ';
 
 const uint8_t keys[4][4] = {
   { 0x1, 0x2, 0x3, 0xA },
@@ -67,8 +68,8 @@ void setup() {
   timer_interrupt_masks[1] |= 0x2;
 }
 
-void build_number() {
-
+void build_display() {
+  update_top_row();
   //printf("updating display with %s \n", num_as_string);
   cowpi_lcd1602_return_home();
   for (int i = 0; i < 17; i++) {
@@ -95,8 +96,7 @@ void loop() {
     //printf("timer not timed out yet \n");
     cowpi_lcd1602_set_backlight(true);
   }
-  build_number();
-
+  build_display();
 }
 
 void initialize_io(void) {
@@ -119,24 +119,33 @@ void handle_buttonpress() {
   if (now - last_buttonpress > DEBOUNCE_TIME) {
     last_buttonpress = now;
 
+    if (is_timedout) {
+      return;
+    }
 
     if (cowpi_left_button_is_pressed()) {
       //negate number
-
-      cowpi_illuminate_left_led();
-    } else {
-
-      cowpi_deluminate_left_led();
     }
     if (cowpi_right_button_is_pressed()) {
+      //clear op
+      operand = ' ';
+      bot_row[0] = ' ';
+
       //clear value
-      printf("right button is pressed! \n");
-      cowpi_illuminate_right_led();
-    } else {
-      printf("right button is not pressed! \n");
-      cowpi_deluminate_right_led();
+      //if op2 is being built, op2 is reset to no defined value, next operation is cleared, and op 1 is displayed
+      if (operand_two != NULL) {
+        //turn back to null
+        operand_two = NULL;
+        //bottom row cleared
+        for (int i = 1; i < 17; i++) {
+          bot_row[i] = ' ';
+        }
+      } else{
+        //else op1 resets to 0 and next op cleared
+        operand_one = 0;
+      }
+
     }
-    printf("\n");
   }
 
 
@@ -154,13 +163,15 @@ void handle_keypress() {
   //button pressed
   timer_time = 0;
 
-  printf("key is pressed! \n");
   uint8_t key_pressed = 0xFF;
   //static unsigned long last_keypress = 0uL;
   unsigned long now = millis();
   if (now - last_keypress > DEBOUNCE_TIME) {
     last_keypress = now;
-
+    //waking up the display doesn't count
+    if (is_timedout) {
+      return;
+    }
     for (int8_t i = 0; i < 4; i++) {
       ioports[D0_D7].output |= 0xF0;
       ioports[D0_D7].output &= ~(1 << (i + 4));
@@ -193,27 +204,45 @@ void handle_keypress() {
       actual_char = key_pressed + '0';
 
       int string_index = 1;
-        //right justified
-        //get to where the numbers are
-        while (((bot_row[string_index] == ' ')) && string_index < 17) {
-          string_index++;
-        }
-        //move all numbers to the left 1
-        while (string_index < 17) {
-          bot_row[string_index - 1] = bot_row[string_index];
-          string_index++;
-        }
-        string_index--;
-        string_index--;
-        bot_row[string_index] = actual_char;
+      //right justified
+      //get to where the numbers are
+      while (((bot_row[string_index] == ' ')) && string_index < 17) {
+        string_index++;
+      }
+      //move all numbers to the left 1
+      while (string_index < 17) {
+        bot_row[string_index - 1] = bot_row[string_index];
+        string_index++;
+      }
+      string_index--;
+      string_index--;
+      bot_row[string_index] = actual_char;
 
-    } else if (key_pressed <= 0xF) {
-      //operator pressed
+    } else if (key_pressed <= 0xE) {
+      //steps
+      /**
+      2. if operand_1 = 0, op1 = op2
+      3. otherwise, if there was an op already there & a number in op2, do op1 _= op2
+      4. if there's an op and no number, then op just changes
+
+      */
       actual_char = key_pressed + 55;
-      char operand = ' ';
-      printf("Actual char: %c \n", actual_char);      
+      if (operand_one == 0) {
+        operand_one = operand_two;
+        operand_two = NULL;
+      } else {
+        //there's a val in op1
+        if (operand != ' ') {
+          //there's already an operand
+          if (operand_two != NULL) {
+            do_operand();
+          }
+        }
+      }
+      //update operand at end no matter what
 
-      switch(actual_char){
+      //find operand
+      switch (actual_char) {
         case 'A':
           operand = '+';
           break;
@@ -226,17 +255,72 @@ void handle_keypress() {
         case 'D':
           operand = 0xFD;
           break;
+        case 'E':
+          operand = ' ';
+          break;
         default:
           operand = ' ';
-          break;        
+          break;
       }
 
-
+      //place operand
       bot_row[0] = operand;
+      //no matter the operation, we'll clear the bottom row after each press
+      for (int i = 1; i < 17; i++) {
+        bot_row[i] = ' ';
+      }
     }
     //issue I'm having is the key pressed is turning to 255 immediately after the button was pressed
+    printf("operand 2 is %ld \n", operand_two);
   }
 }
+
+void do_operand() {
+  printf("Operand before is %ld \n", operand_one);
+  switch (operand) {
+    case '+':
+      operand_one += operand_two;
+      break;
+    case '-':
+      operand_one -= operand_two;
+      break;
+    case 'x':
+      operand_one *= operand_two;
+      break;
+    case 0xFD:
+      if (operand_two != 0) {
+        operand_one /= operand_two;
+      } else {
+        //oops division by 0
+        printf("no can do boss \n");
+      }
+    default:
+      break;
+  }
+  printf("Operand before is %ld \n", operand_one);
+  //no matter what, the bottom is cleared
+  operand_two = NULL;
+}
+
+void update_top_row() {
+  //top row has the operand_one value, so we turn that to a string and add it to the rightmost side of the top row
+  for (int i = 0; i < 17; i++) {
+    top_row[i] = ' ';
+  }
+
+
+  char operand_one_string[17];
+  sprintf(operand_one_string, "%ld", operand_one);
+
+  //add to rightmost side
+  int num_length = strlen(operand_one_string);
+  int starting_index = 16 - num_length;
+  for (int i = 0; i < num_length; i++) {
+    top_row[i + starting_index] = operand_one_string[i];
+  }
+}
+
+
 
 ISR(TIMER1_COMPA_vect) {
   timer_time++;
