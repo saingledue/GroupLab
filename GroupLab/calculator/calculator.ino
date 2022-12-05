@@ -97,7 +97,20 @@ void loop() {
     //printf("timer not timed out yet \n");
     cowpi_lcd1602_set_backlight(true);
   }
+  if(is_error)
+  {
+
+  }
   build_display();
+}
+
+void call_error() {
+    cowpi_lcd1602_clear_display();
+    cowpi_lcd1602_place_character(0x10, 'E');
+    cowpi_lcd1602_place_character(0x11, 'R');
+    cowpi_lcd1602_place_character(0x12, 'R');
+    cowpi_lcd1602_place_character(0x13, 'O');
+    cowpi_lcd1602_place_character(0x14, 'R');
 }
 
 void initialize_io(void) {
@@ -317,6 +330,7 @@ void do_operand() {
         operand_one /= operand_two;
       } else {
         //oops division by 0
+        call_error();
         printf("no can do boss \n");
       }
     default:
