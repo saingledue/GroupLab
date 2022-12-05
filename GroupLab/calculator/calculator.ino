@@ -15,7 +15,7 @@
 
 #include "CowPi.h"
 
-#define DEBOUNCE_TIME 500u
+#define DEBOUNCE_TIME 200u
 
 
 // UNCOMMENT THE STRUCTURE FOR THE TIMER YOU WLL USE
@@ -32,12 +32,15 @@ volatile int timer_time = 0;
 bool is_timedout = 0;
 
 //will be in top row
-volatile int32_t operand_one = 0;
+int32_t operand_one = 0;
 //will be in bottom row
-volatile int32_t operand_two = NULL;
+int32_t operand_two = NULL;
+bool op_is_null = true;
+
 static char top_row[17] = "                 ";
 static char bot_row[17] = "                 ";
 bool is_error = 0;
+bool is_cleared = 0;
 bool operand1_too_big = 0;
 bool result_too_big = 0;
 static char operand = ' ';
@@ -73,6 +76,7 @@ void setup() {
 
 void build_display() {
   update_top_row();
+  update_bot_row();
   //printf("updating display with %s \n", num_as_string);
   cowpi_lcd1602_return_home();
   for (int i = 0; i < 17; i++) {
@@ -99,20 +103,27 @@ void loop() {
     //printf("timer not timed out yet \n");
     cowpi_lcd1602_set_backlight(true);
   }
-  if(is_error || result_too_big)
-  {
-	call_error();
+  if (is_error || result_too_big) {
+
+    call_error();
   }
   build_display();
 }
 
 void call_error() {
+  if (!is_cleared) {
     cowpi_lcd1602_clear_display();
-    cowpi_lcd1602_place_character(0x10, 'E');
-    cowpi_lcd1602_place_character(0x11, 'R');
-    cowpi_lcd1602_place_character(0x12, 'R');
-    cowpi_lcd1602_place_character(0x13, 'O');
-    cowpi_lcd1602_place_character(0x14, 'R');
+    is_cleared = true;
+  }
+  for (int i = 0; i < 17; i++) {
+    top_row[i] = ' ';
+    bot_row[i] = ' ';
+  }
+  top_row[11] = 'E';
+  top_row[12] = 'R';
+  top_row[13] = 'R';
+  top_row[14] = 'O';
+  top_row[15] = 'R';
 }
 
 void initialize_io(void) {
@@ -135,52 +146,39 @@ void handle_buttonpress() {
   if (now - last_buttonpress > DEBOUNCE_TIME) {
     last_buttonpress = now;
 
-    if (is_timedout) {
-      return;
-    }
+    if (!is_timedout) {
 
-    if (cowpi_left_button_is_pressed()) {
-      //negate number
-      //if op2 exists, negate it. if op2 doesn't exist, op1 is negated
-      if (operand_two != NULL) {
-        //negate op2
-        operand_two *= -1;
-        //find leftmost side of number on botrow to add/remove negative sign. start at 1 to ignore operand
-        int curr_ind = 1;
-        while (((bot_row[curr_ind] == ' ')) && curr_ind < 17) {
-          curr_ind++;
-        }
-        if (operand_two < 0) {
-          //add a negative sign
-          bot_row[curr_ind - 1] = '-';
+
+      if (cowpi_left_button_is_pressed()) {
+        //negate number
+        //if op2 exists, negate it. if op2 doesn't exist, op1 is negated
+        if (!op_is_null) {
+          //negate op2
+          operand_two *= -1;
+          //find leftmost side of number on botrow to add/remove negative sign. start at 1 to ignore operand
         } else {
-          //remove negative sign
-          bot_row[curr_ind] = ' ';
+          //negate op1
+          operand_one *= -1;
         }
-
-
-
-      } else {
-        //negate op1
-        operand_one *= -1;
       }
-    }
-    if (cowpi_right_button_is_pressed()) {
-      //clear op no matter what
-      operand = ' ';
-      bot_row[0] = ' ';
-      //clear value
-      //if op2 is being built, op2 is reset to no defined value, next operation is cleared, and op 1 is displayed
-      if (operand_two != NULL) {
-        //turn back to null
-        operand_two = NULL;
-        //bottom row cleared
-        for (int i = 1; i < 17; i++) {
-          bot_row[i] = ' ';
+      if (cowpi_right_button_is_pressed()) {
+        //clear op no matter what
+        operand = ' ';
+        bot_row[0] = ' ';
+        //clear value
+        //if op2 is being built, op2 is reset to no defined value, next operation is cleared, and op 1 is displayed
+        if (operand_two != NULL) {
+          //turn back to null
+          operand_two = NULL;
+          op_is_null = true;
+          //bottom row cleared
+          for (int i = 1; i < 17; i++) {
+            bot_row[i] = ' ';
+          }
+        } else {
+          //else op1 resets to 0 and next op cleared
+          operand_one = 0;
         }
-      } else {
-        //else op1 resets to 0 and next op cleared
-        operand_one = 0;
       }
     }
   }
@@ -201,16 +199,16 @@ void handle_keypress() {
   if (now - last_keypress > DEBOUNCE_TIME) {
     last_keypress = now;
     //waking up the display doesn't count
-    if (is_timedout) {
-      return;
-    }
-    for (int8_t i = 0; i < 4; i++) {
-      ioports[D0_D7].output |= 0xF0;
-      ioports[D0_D7].output &= ~(1 << (i + 4));
-      delayMicroseconds(1);
-      for (int8_t j = 0; j < 4; j++) {
-        if (!(ioports[D14_D19].input & (1 << j))) {
-          key_pressed = keys[i][j];
+    if (!is_timedout) {
+
+      for (int8_t i = 0; i < 4; i++) {
+        ioports[D0_D7].output |= 0xF0;
+        ioports[D0_D7].output &= ~(1 << (i + 4));
+        delayMicroseconds(1);
+        for (int8_t j = 0; j < 4; j++) {
+          if (!(ioports[D14_D19].input & (1 << j))) {
+            key_pressed = keys[i][j];
+          }
         }
       }
     }
@@ -222,33 +220,19 @@ void handle_keypress() {
     char actual_char = ' ';
     if (key_pressed < 0xA) {
       //update value
-      if (operand_two == NULL) {
+      if (op_is_null) {
         operand_two = key_pressed;
+        op_is_null = false;
       } else {
-        operand_two *= 10;
-        if (operand_two < 0) {
-          operand_two -= key_pressed;
-        } else {
-          operand_two += key_pressed;
+        if ((operand_two <= 99999999) && (operand_two > -99999999)) {
+          operand_two *= 10;
+          if (operand_two < 0) {
+            operand_two -= key_pressed;
+          } else {
+            operand_two += key_pressed;
+          }
         }
       }
-      actual_char = key_pressed + '0';
-
-      int string_index = 1;
-      //right justified
-      //get to where the numbers are
-      while (((bot_row[string_index] == ' ')) && string_index < 17) {
-        string_index++;
-      }
-      //move all numbers to the left 1
-      while (string_index < 17) {
-        bot_row[string_index - 1] = bot_row[string_index];
-        string_index++;
-      }
-      string_index--;
-      string_index--;
-      bot_row[string_index] = actual_char;
-
     } else if (key_pressed <= 0xE) {
       //operand key pressed
       //steps
@@ -258,14 +242,16 @@ void handle_keypress() {
       4. if there's an op and no number, then op just changes
 
       */
+      printf("Char pressed \n Operand 1: %ld \n Operand 2: %ld \n", operand_one, operand_two);
       actual_char = key_pressed + 55;
       //(operand_one == 0) ||
-      if (operand_two != NULL) {
+      if (!op_is_null) {
         //check if there's an operation to do
         if (operand == ' ') {
           //move value up because you're starting a new calculation
           operand_one = operand_two;
           operand_two = NULL;
+          op_is_null = true;
         } else {
           do_operand();
         }
@@ -328,40 +314,78 @@ void do_operand() {
       operand_one *= operand_two;
       break;
     case division_sign:
-      if (operand_two != 0) {
+      printf("Good choice! \n");
+      // if (operand_two != 0) {
+      //   printf("Dividing \n");
+
+      if (operand_two == 0) {
+        is_error = true;
+      } else {
         operand_one /= operand_two;
-      } 
-	else {
-        //oops division by 0
-        call_error();
-        printf("no can do boss \n");
       }
+
+      // } else {
+      //   //oops division by 0
+      //   printf("no can do boss \n");
+      //   call_error();
+      // }
+      break;
     default:
       break;
   }
-  if(operand_one > 999999 | operand_one < -999999){
-  	result_too_big = true;
+  if (operand_one > 999999999 | operand_one < -999999999) {
+    result_too_big = true;
   }
-  printf("Operand before is %ld \n", operand_one);
+  printf("Operand after is %ld \n\n", operand_one);
   //no matter what, the bottom is cleared
   operand_two = NULL;
+  op_is_null = true;
 }
 
 void update_top_row() {
   //top row has the operand_one value, so we turn that to a string and add it to the rightmost side of the top row
-  for (int i = 0; i < 17; i++) {
-    top_row[i] = ' ';
+
+  if (!is_error && !result_too_big) {
+    //only write operand_one to the top if errors aren't existing
+    for (int i = 0; i < 17; i++) {
+      top_row[i] = ' ';
+    }
+
+
+    char operand_one_string[17];
+    sprintf(operand_one_string, "%ld", operand_one);
+
+    //add to rightmost side
+    int num_length = strlen(operand_one_string);
+    int starting_index = 16 - num_length;
+    for (int i = 0; i < num_length; i++) {
+      top_row[i + starting_index] = operand_one_string[i];
+    }
   }
+}
+void update_bot_row() {
+  //top row has the operand_one value, so we turn that to a string and add it to the rightmost side of the top row
+  if (!op_is_null) {
 
 
-  char operand_one_string[17];
-  sprintf(operand_one_string, "%ld", operand_one);
 
-  //add to rightmost side
-  int num_length = strlen(operand_one_string);
-  int starting_index = 16 - num_length;
-  for (int i = 0; i < num_length; i++) {
-    top_row[i + starting_index] = operand_one_string[i];
+    if (!is_error && !result_too_big) {
+      //only write operand_two to the bot if errors aren't existing
+      for (int i = 1; i < 17; i++) {
+        bot_row[i] = ' ';
+      }
+
+
+      char operand_two_string[17];
+      sprintf(operand_two_string, "%ld", operand_two);
+
+      //add to rightmost side
+      int num_length = strlen(operand_two_string);
+      int starting_index = 16 - num_length;
+      for (int i = 0; i < num_length; i++) {
+        bot_row[i + starting_index] = operand_two_string[i];
+      }
+    }
   }
 }
 
