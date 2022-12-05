@@ -38,6 +38,8 @@ volatile int32_t operand_two = NULL;
 static char top_row[17] = "                 ";
 static char bot_row[17] = "                 ";
 bool is_error = 0;
+bool operand1_too_big = 0;
+bool result_too_big = 0;
 static char operand = ' ';
 
 const char division_sign = 0xFD;
@@ -97,9 +99,9 @@ void loop() {
     //printf("timer not timed out yet \n");
     cowpi_lcd1602_set_backlight(true);
   }
-  if(is_error)
+  if(is_error || result_too_big)
   {
-
+	call_error();
   }
   build_display();
 }
