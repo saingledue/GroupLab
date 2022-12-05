@@ -330,13 +330,17 @@ void do_operand() {
     case division_sign:
       if (operand_two != 0) {
         operand_one /= operand_two;
-      } else {
+      } 
+	else {
         //oops division by 0
         call_error();
         printf("no can do boss \n");
       }
     default:
       break;
+  }
+  if(operand_one > 999999 | operand_one < -999999){
+  	result_too_big = true;
   }
   printf("Operand before is %ld \n", operand_one);
   //no matter what, the bottom is cleared
